@@ -1,0 +1,9 @@
+<launch>
+    <arg name="obb_cluster_topic_name" default="/obb_cluster" />
+    <arg name="obb_boxes_topic_name" default="/obb_boxes" />
+
+    <node name="obb_generator" pkg="obb_generator" type="obb_generator" >
+        <param name="obb_cluster_topic_name" value="$(find obb_generator)/$(arg obb_cluster_topic_name)" />
+        <param name="obb_boxes_topic_name" value="$(find obb_generator)/$(arg obb_boxes_topic_name)" />
+    </node>
+</launch>

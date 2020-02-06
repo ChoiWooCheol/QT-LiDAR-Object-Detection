@@ -1,0 +1,26 @@
+box_params:
+  default_x: 0.0
+  default_y: 0.0
+  default_size: 50.0
+  default_pixel: 128
+
+quadnode_params:
+  minimum_pixel: 0.390625
+  start_Xindex: 64
+  start_Yindex: 63
+  
+quadtree_params:
+  minimum_pixel: 0.390625
+  box_height: -1.785
+  box_z: 0.00001
+  #box_height: -0.285
+  #box_z: 3.00001
+  pixel_x: 128
+  pixel_y: 128
+  pixel_Xmax: -25
+  pixel_Ymax: 25
+  QTsub_topic: "/degree_filtered_points"
+  QTpub_topic: "/detected_boxes"
+
+boxcluster_params:
+  correction_eps: 0.2
