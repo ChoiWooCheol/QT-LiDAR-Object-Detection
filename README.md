@@ -3,6 +3,7 @@
   * Upgrade version of LiDAR-obstacle-dectection Repository.
   * Realtime object recognization, using only LiDAR. 
   * Available for real-time self-driving systems.   
+  * More powerful than euclidean clustering detection
 
 # Hardware
 * HYUNDAI i30
