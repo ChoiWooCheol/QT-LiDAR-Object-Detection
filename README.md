@@ -27,7 +27,9 @@
 * '/obb_boxes'
 
 # Run 
-roslaunch lidar_detect qt_detect_launch.launch --screen 
+```sh
+$ roslaunch lidar_detect qt_detect_launch.launch --screen
+``` 
 
 # Result
 1. Existing method
