@@ -14,7 +14,7 @@
 
 # What is changed content
 * Add include files.
-* Existing method not provide minium size bounding box, but this version is providing.
+* Existing method did not provide minium size bounding box, but this version is providing.
 * Use corvarience of points, and calculate Quaternion and Rotation information of bounding box.
 * bounding box's pose has orientation values.
 
