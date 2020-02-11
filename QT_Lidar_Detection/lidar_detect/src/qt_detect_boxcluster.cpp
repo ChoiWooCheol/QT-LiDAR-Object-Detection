@@ -77,8 +77,16 @@ void BoxCluster::makeGroup()
         vg.setInputCloud(in_ptr);
         vg.setLeafSize(0.05f,0.05f,0.05f);
         vg.filter(*filtered_cloud);
+
+        if(filtered_cloud->points.size() == 4 && 
+           filtered_cloud->points[0].x - filtered_cloud->points[1].x < 0.4)
+        {
+            in_points.clear();
+            continue;
+        }
+
         pcl::toROSMsg(*filtered_cloud, points_group);
-    
+
         cloud_arr_msg.cloudArray.emplace_back(points_group);
         cloud_arr_msg.zArray.emplace_back(longest_local_z);
         in_points.clear();

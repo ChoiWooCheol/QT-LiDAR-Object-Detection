@@ -138,7 +138,6 @@ public:
         clusteredBox.header.frame_id = "velodyne";
         cloud_arr_msg.cloudArray.clear();
         cloud_arr_msg.cloudArray.resize(0);
-        // grouping_count = 0;
     }
 
     ~BoxCluster(){
@@ -187,8 +186,7 @@ private:
     ros::Subscriber filtered_sub;
     ros::Publisher detect_pub;
 
-
-    std::string pubtopic, subtopic;
+    std::string pubtopic;
     int point_pixel_x, point_pixel_y;
     int pixel_Xmax;
     int pixel_Ymax;

@@ -12,11 +12,14 @@
 class Plane
 {
     public:
-        Plane() : cloud_filtered(new pcl::PointCloud<pcl::PointXYZ>)
+        Plane() 
+            : cloud_filtered(new pcl::PointCloud<pcl::PointXYZ>)
+            , private_nh("~")
+            , QT(new QuadTree())
         {   
-            sub = nh.subscribe("/points_raw", 10000, &Plane::callback, this);
+            if(!private_nh.getParam("/quadtree_params/QTsub_topic", subtopic)) throw std::runtime_error("set subtopic");
+            sub = nh.subscribe(subtopic.c_str(), 10000, &Plane::callback, this);
             pub4 = nh.advertise<sensor_msgs::PointCloud2>("/projected_cloud", 10000);
-            QT = new QuadTree();
         }
 
         void callback(const sensor_msgs::PointCloud2::ConstPtr &ptr);
@@ -25,10 +28,11 @@ class Plane
         void projection_onto_plane();
         
     private:
-        ros::NodeHandle nh;
+        ros::NodeHandle nh, private_nh;
         ros::Publisher pub;
         ros::Publisher pub4;
         ros::Subscriber sub;
+        std::string subtopic;
         QuadTree* QT;
         geometry_msgs::Point normal_vector; 
         pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_filtered;

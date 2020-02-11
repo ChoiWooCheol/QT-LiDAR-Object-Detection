@@ -24,7 +24,6 @@ void QuadTree::CheckParams(ros::NodeHandle& _nh)
     if(!_nh.getParam("/quadtree_params/minimum_pixel",    boxSize))        throw std::runtime_error("set boxSize");
     if(!_nh.getParam("/quadtree_params/pixel_x",          point_pixel_x))  throw std::runtime_error("set point_pixel_x");
     if(!_nh.getParam("/quadtree_params/pixel_y",          point_pixel_y))  throw std::runtime_error("set point_pixel_y");
-    if(!_nh.getParam("/quadtree_params/QTsub_topic",      subtopic))       throw std::runtime_error("set subtopic");
     if(!_nh.getParam("/quadtree_params/QTpub_topic",      pubtopic))       throw std::runtime_error("set pubtopic");
     if(!_nh.getParam("/quadtree_params/pixel_Xmax",       pixel_Xmax))     throw std::runtime_error("set pixel_Xmax");
     if(!_nh.getParam("/quadtree_params/pixel_Ymax",       pixel_Ymax))     throw std::runtime_error("set pixel_Ymax");

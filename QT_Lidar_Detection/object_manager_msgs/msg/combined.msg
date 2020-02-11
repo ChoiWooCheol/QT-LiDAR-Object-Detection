@@ -1,0 +1,3 @@
+std_msgs/Header header
+jsk_recognition_msgs/BoundingBoxArray bb_ary
+autoware_msgs/DetectedObjectArray obj_ary

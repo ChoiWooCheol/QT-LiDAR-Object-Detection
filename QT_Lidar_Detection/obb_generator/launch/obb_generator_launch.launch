@@ -2,8 +2,9 @@
     <arg name="obb_cluster_topic_name" default="/obb_cluster" />
     <arg name="obb_boxes_topic_name" default="/obb_boxes" />
 
-    <node name="obb_generator" pkg="obb_generator" type="obb_generator" >
+    <node name="obb_generator" pkg="obb_generator" type="obb_generator" output="screen" >
         <param name="obb_cluster_topic_name" value="$(find obb_generator)/$(arg obb_cluster_topic_name)" />
         <param name="obb_boxes_topic_name" value="$(find obb_generator)/$(arg obb_boxes_topic_name)" />
+        <param name="maximum_cluster_size" value="1024" />
     </node>
 </launch>

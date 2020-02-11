@@ -15,8 +15,11 @@
 
 using namespace std::chrono_literals;
 
+#define USE_VECTORMAP 0
+
 #define MODE 0 // 1 is AABB mode
                 // 0 is OBB mode
+#define MAX_CLUSTER_SIZE 100
 
 class ObbGenerator{
 public:
@@ -27,6 +30,8 @@ public:
             throw std::runtime_error("set obb_cluster_topic_name");
         if(!private_nh.getParam("obb_boxes_topic_name", pub_name))
             throw std::runtime_error("set obb_boxes_topic_name");
+        if(!private_nh.getParam("maximum_cluster_size", maximum_cluster_size))
+            throw std::runtime_error("set maximum_cluster_size");
 
         obb_sub = nh.subscribe(sub_name.c_str(), 1, &ObbGenerator::obb_callback, this);
         obbArr_pub = nh.advertise<jsk_recognition_msgs::BoundingBoxArray>(pub_name.c_str(), 1);
@@ -36,16 +41,11 @@ public:
 
     }
 
-    inline bool _init(){
-        
-#if MODE /* AABB mode */
-        feature_extractor.getAABB (min_point_AABB, max_point_AABB);
+#if USE_VECTORMAP
+    void obb_callback(){
 
-#else /* OBB mode */
-        feature_extractor.getOBB (min_point_OBB, max_point_OBB, position_OBB, rotational_matrix_OBB);
-#endif
-        return true;
     }
+#endif
 
     void obb_callback(const obb_generator_msgs::cloudArray::ConstPtr& in_obb){
         pcl::PointCloud<pcl::PointXYZ> scan;
@@ -56,14 +56,15 @@ public:
         int z_idx = 0;
         for (auto& cloudarr : in_obb->cloudArray){
             pcl::fromROSMsg(cloudarr, scan);
+
+            if(scan.points.size() > MAX_CLUSTER_SIZE) continue;
+
             pcl::PointCloud<pcl::PointXYZ>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZ> (scan));
             feature_extractor.setInputCloud (cloud);
             feature_extractor.compute ();
-            if(!_init()){
-                ROS_ERROR("value initialize error!");
-                exit(1);
-            } 
-#if MODE
+
+#if MODE    /* AABB MODE */
+            feature_extractor.getAABB (min_point_AABB, max_point_AABB);
             obb.header = in_obb->header;
             obb.pose.position.x = min_point_AABB.x + (max_point_AABB.x - min_point_AABB.x) / 2;
             obb.pose.position.y = min_point_AABB.y + (max_point_AABB.y - min_point_AABB.y) / 2;
@@ -72,8 +73,8 @@ public:
             obb.dimensions.y = max_point_AABB.y - min_point_AABB.y;
             obb.dimensions.z = in_obb->zArray[z_idx];
 
-
-#else    
+#else       /* OBB MODE */
+            feature_extractor.getOBB (min_point_OBB, max_point_OBB, position_OBB, rotational_matrix_OBB);
             obb.header = in_obb->header;
             Eigen::Quaternionf quat (rotational_matrix_OBB);
             obb.pose.orientation.x = quat.x();
@@ -99,8 +100,9 @@ private:
     ros::Subscriber obb_sub;
     ros::Publisher obbArr_pub;
     std::string pub_name, sub_name;
-    pcl::MomentOfInertiaEstimation <pcl::PointXYZ> feature_extractor;
-    
+    pcl::MomentOfInertiaEstimation<pcl::PointXYZ> feature_extractor;
+    double maximum_cluster_size;
+
 #if MODE
     /* AABB mode */
     pcl::PointXYZ min_point_AABB;
@@ -119,6 +121,12 @@ int main (int argc, char** argv)
 {
     ros::init(argc, argv, "obb_generator");
     ObbGenerator obbgen;
+
+    if(MODE)
+        ROS_INFO("OBB GENERATOR MODE : AABB MODE");
+    else
+        ROS_INFO("OBB GENERATOR MODE : OBB MODE");
+    
     ros::spin();
     return (0);
 }
