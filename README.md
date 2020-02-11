@@ -17,6 +17,7 @@
 * Existing method did not provide minium size bounding box, but this version is providing.
 * Use corvarience of points, and calculate Quaternion and Rotation information of bounding box.
 * bounding box's pose has orientation values.
+* if you use vector map, can change cluster size (do not generte bounding box of static objects in vectormap)
 
 # Input topic
 * '/points_raw'
@@ -26,9 +27,14 @@
 * '/obb_cluster'
 * '/obb_boxes'
 
+# MODE
+* OBB MODE : Bounding boxes are minimum size and have orientation values
+* AABB MODE : Bounding boxes are not minimun size and do not have orientation. but a little bit fast 
+* USE_VECTORMAP MODE : be going to add
+
 # Run 
 ```sh
-$ roslaunch lidar_detect qt_detect_launch.launch --screen
+$ roslaunch lidar_detect qt_detect_launch.launch
 ``` 
 
 # Result
