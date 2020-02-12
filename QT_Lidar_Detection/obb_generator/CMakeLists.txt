@@ -42,6 +42,7 @@ find_package(catkin REQUIRED COMPONENTS
   pcl_ros
   pcl_conversions
   obb_generator_msgs
+  autoware_msgs
 )
 ##   * add "message_runtime" and every package in MSG_DEP_SET to
 ##     catkin_package(CATKIN_DEPENDS ...)
@@ -117,6 +118,7 @@ catkin_package(
   pcl_ros
   pcl_conversions
   obb_generator_msgs
+  autoware_msgs
 #  DEPENDS system_lib
 )
 
