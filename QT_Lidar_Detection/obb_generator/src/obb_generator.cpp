@@ -21,7 +21,7 @@ using namespace std::chrono_literals;
 /* set modes */
 #define USE_VECTORMAP 0
 #define USE_AUTOWARE 0
-#define MODE 0 // 1 is AABB mode
+#define MODE 1 // 1 is AABB mode
                // 0 is OBB mode
 /* --------- */
     
@@ -97,7 +97,7 @@ public:
             obb.header = in_obb->header;
             obb.pose.position.x = min_point_AABB.x + (max_point_AABB.x - min_point_AABB.x) / 2;
             obb.pose.position.y = min_point_AABB.y + (max_point_AABB.y - min_point_AABB.y) / 2;
-            obb.pose.position.z = min_point_AABB.z + (max_point_AABB.z - min_point_AABB.z) / 2;
+            obb.pose.position.z = min_point_AABB.z + (in_obb->zArray[z_idx] / 2);
             obb.dimensions.x = max_point_AABB.x - min_point_AABB.x;
             obb.dimensions.y = max_point_AABB.y - min_point_AABB.y;
             obb.dimensions.z = in_obb->zArray[z_idx];
