@@ -18,11 +18,13 @@ using namespace std::chrono_literals;
 #include <autoware_msgs/DetectedObjectArray.h>
 #include <autoware_msgs/DetectedObject.h>
 #include <geometry_msgs/Point32.h>
+#include <visualization_msgs/MarkerArray.h>
 
 /* set modes */
 #define USE_VECTORMAP 0
 #define USE_AUTOWARE 0
-#define MODE 0 // 1 is AABB mode
+#define DEBUG 1
+#define MODE 1 // 1 is AABB mode
                // 0 is OBB mode
 /* --------- */
     
@@ -41,6 +43,8 @@ public:
             throw std::runtime_error("set maximum_cluster_size");
         
         obb_sub = nh.subscribe(sub_name.c_str(), 1, &ObbGenerator::obb_callback, this);
+
+        visualization_pub = nh.advertise<visualization_msgs::MarkerArray>("/detection/visualization_objects", 1);
         obbArr_pub = nh.advertise<jsk_recognition_msgs::BoundingBoxArray>(pub_name.c_str(), 1);
         autoware_detect_pub = nh.advertise<autoware_msgs::DetectedObjectArray>("/detection/lidar_detector/objects", 1);
 
@@ -115,6 +119,36 @@ public:
             seq++;
         }
         autoware_detect_pub.publish(detected_objects);
+#if DEBUG
+        debugVisualization(detected_objects);
+#endif
+    }
+
+    void debugVisualization(autoware_msgs::DetectedObjectArray& in_obj){
+        visualization_msgs::MarkerArray visualization_markers;
+        int marker_id_ = 0;
+        for (auto const &object: in_obj.objects)
+        {
+            visualization_msgs::Marker hull;
+            hull.lifetime = ros::Duration(0.1);
+            hull.header = in_obj.header;
+            hull.type = visualization_msgs::Marker::LINE_STRIP;
+            hull.action = visualization_msgs::Marker::ADD;
+            hull.ns = "lidar_detect/hull_markers";
+            hull.id = marker_id_++;
+            hull.scale.x = 0.2;
+
+            for(auto const &point: object.convex_hull.polygon.points)
+            {
+                geometry_msgs::Point tmp_point;
+                tmp_point.x = point.x;
+                tmp_point.y = point.y;
+                tmp_point.z = point.z;
+                hull.points.push_back(tmp_point);
+            }
+            visualization_markers.markers.push_back(hull);
+        }
+        visualization_pub.publish(visualization_markers);
     }
 
 #if USE_VECTORMAP
@@ -189,6 +223,8 @@ private:
 
     ros::Publisher obbArr_pub;
     ros::Publisher autoware_detect_pub;
+    ros::Publisher visualization_pub;
+
     std::string pub_name, sub_name;
     pcl::MomentOfInertiaEstimation<pcl::PointXYZ> feature_extractor;
     double maximum_cluster_size;
@@ -209,9 +245,9 @@ private:
 void printMode(){
     ROS_INFO("===== OBB GENERATOR MODES =====");
     if(MODE)
-        ROS_INFO("  Gen MODE       : OBB");
-    else
         ROS_INFO("  Gen MODE       : AABB");
+    else
+        ROS_INFO("  Gen MODE       : OBB");
 
     if(USE_VECTORMAP)
         ROS_INFO("  Vectormap MODE : True");
@@ -222,6 +258,11 @@ void printMode(){
         ROS_INFO("  Autoware MODE  : True");
     else
         ROS_INFO("  Autoware MODE  : False");
+
+    if(DEBUG)
+        ROS_INFO("  Debug MODE     : True");
+    else
+        ROS_INFO("  Debug MODE     : False");
 }
 
 int main (int argc, char** argv)
