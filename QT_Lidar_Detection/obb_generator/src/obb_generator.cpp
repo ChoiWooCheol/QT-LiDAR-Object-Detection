@@ -17,11 +17,12 @@ using namespace std::chrono_literals;
 
 #include <autoware_msgs/DetectedObjectArray.h>
 #include <autoware_msgs/DetectedObject.h>
+#include <geometry_msgs/Point32.h>
 
 /* set modes */
 #define USE_VECTORMAP 0
 #define USE_AUTOWARE 0
-#define MODE 1 // 1 is AABB mode
+#define MODE 0 // 1 is AABB mode
                // 0 is OBB mode
 /* --------- */
     
@@ -42,17 +43,23 @@ public:
         obb_sub = nh.subscribe(sub_name.c_str(), 1, &ObbGenerator::obb_callback, this);
         obbArr_pub = nh.advertise<jsk_recognition_msgs::BoundingBoxArray>(pub_name.c_str(), 1);
         autoware_detect_pub = nh.advertise<autoware_msgs::DetectedObjectArray>("/detection/lidar_detector/objects", 1);
+
+        cluster_clouds.clear();
+        cluster_clouds.resize(0);
     }
     
     ~ObbGenerator(){
 
     }
 
-    void publishDetectedObjects(const jsk_recognition_msgs::BoundingBoxArray& in_objects)
+
+    void publishDetectedObjects(const jsk_recognition_msgs::BoundingBoxArray& in_objects,
+                                const std::vector<sensor_msgs::PointCloud2>& cluster_clouds)
     {
+        uint seq = 0;
         autoware_msgs::DetectedObjectArray detected_objects;
         detected_objects.header = in_objects.header;
-
+        geometry_msgs::Point32 point;
         for (auto& object : in_objects.boxes)
         {
             autoware_msgs::DetectedObject detected_object;
@@ -62,10 +69,50 @@ public:
             detected_object.space_frame = in_objects.header.frame_id;
             detected_object.pose = object.pose;
             detected_object.dimensions = object.dimensions;
-            // detected_object.pointcloud = in_clusters.clusters[i].cloud;
-            // detected_object.convex_hull = in_clusters.clusters[i].convex_hull;
+            detected_object.pointcloud = cluster_clouds[seq];
             detected_object.valid = true;
             detected_objects.objects.push_back(detected_object);
+
+            point.x = object.pose.position.x + (object.dimensions.x / 2);
+            point.y = object.pose.position.y + (object.dimensions.y / 2);
+            point.z = object.pose.position.z - (object.dimensions.z / 2);
+            detected_object.convex_hull.polygon.points.emplace_back(point);
+        
+            point.x = object.pose.position.x - (object.dimensions.x / 2);
+            point.y = object.pose.position.y + (object.dimensions.y / 2);
+            point.z = object.pose.position.z - (object.dimensions.z / 2);
+            detected_object.convex_hull.polygon.points.emplace_back(point);
+        
+            point.x = object.pose.position.x + (object.dimensions.x / 2);
+            point.y = object.pose.position.y - (object.dimensions.y / 2);
+            point.z = object.pose.position.z - (object.dimensions.z / 2);
+            detected_object.convex_hull.polygon.points.emplace_back(point);
+        
+            point.x = object.pose.position.x - (object.dimensions.x / 2);
+            point.y = object.pose.position.y - (object.dimensions.y / 2);
+            point.z = object.pose.position.z - (object.dimensions.z / 2);
+            detected_object.convex_hull.polygon.points.emplace_back(point);
+
+            point.x = object.pose.position.x + (object.dimensions.x / 2);
+            point.y = object.pose.position.y + (object.dimensions.y / 2);
+            point.z = object.pose.position.z + (object.dimensions.z / 2);
+            detected_object.convex_hull.polygon.points.emplace_back(point);
+        
+            point.x = object.pose.position.x - (object.dimensions.x / 2);
+            point.y = object.pose.position.y + (object.dimensions.y / 2);
+            point.z = object.pose.position.z + (object.dimensions.z / 2);
+            detected_object.convex_hull.polygon.points.emplace_back(point);
+        
+            point.x = object.pose.position.x + (object.dimensions.x / 2);
+            point.y = object.pose.position.y - (object.dimensions.y / 2);
+            point.z = object.pose.position.z + (object.dimensions.z / 2);
+            detected_object.convex_hull.polygon.points.emplace_back(point);
+        
+            point.x = object.pose.position.x - (object.dimensions.x / 2);
+            point.y = object.pose.position.y - (object.dimensions.y / 2);
+            point.z = object.pose.position.z + (object.dimensions.z / 2);
+            detected_object.convex_hull.polygon.points.emplace_back(point);
+            seq++;
         }
         autoware_detect_pub.publish(detected_objects);
     }
@@ -119,10 +166,17 @@ public:
 #endif
             ++z_idx;
             obb_arr.boxes.emplace_back(obb);
+
+#if USE_AUTOWARE
+            cluster_clouds.emplace_back(cloudarr);
+
+#endif
         }
 
 #if USE_AUTOWARE
-        publishDetectedObjects(obb_arr);
+        publishDetectedObjects(obb_arr, cluster_clouds);
+        cluster_clouds.clear();
+        cluster_clouds.resize(0);
 #endif
         obbArr_pub.publish(obb_arr);
     }
@@ -138,7 +192,7 @@ private:
     std::string pub_name, sub_name;
     pcl::MomentOfInertiaEstimation<pcl::PointXYZ> feature_extractor;
     double maximum_cluster_size;
-
+    std::vector<sensor_msgs::PointCloud2> cluster_clouds;
 #if MODE
     /* AABB mode */
     pcl::PointXYZ min_point_AABB;
@@ -152,17 +206,30 @@ private:
 #endif
 };
 
+void printMode(){
+    ROS_INFO("===== OBB GENERATOR MODES =====");
+    if(MODE)
+        ROS_INFO("  Gen MODE       : OBB");
+    else
+        ROS_INFO("  Gen MODE       : AABB");
+
+    if(USE_VECTORMAP)
+        ROS_INFO("  Vectormap MODE : True");
+    else
+        ROS_INFO("  Vectormap MODE : False");
+    
+    if(USE_AUTOWARE)
+        ROS_INFO("  Autoware MODE  : True");
+    else
+        ROS_INFO("  Autoware MODE  : False");
+}
 
 int main (int argc, char** argv)
 {
     ros::init(argc, argv, "obb_generator");
     ObbGenerator obbgen;
+    printMode();
 
-    if(MODE)
-        ROS_INFO("OBB GENERATOR MODE : AABB MODE");
-    else
-        ROS_INFO("OBB GENERATOR MODE : OBB MODE");
-    
     ros::spin();
     return (0);
 }
