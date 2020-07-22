@@ -7,28 +7,43 @@
 #include <pcl/io/pcd_io.h>
 #include <pcl/point_types.h>
 #include <pcl/visualization/cloud_viewer.h>
-#include <obb_generator_msgs/cloudArray.h>
+#include <lidar_visionlab_clustering/cloudArray.h>
 #include <pcl_ros/point_cloud.h>
-#include<jsk_recognition_msgs/BoundingBox.h>
-#include<jsk_recognition_msgs/BoundingBoxArray.h>
+#include <jsk_recognition_msgs/BoundingBox.h>
+#include <jsk_recognition_msgs/BoundingBoxArray.h>
 #include <sensor_msgs/PointCloud2.h>
+#include <pcl_ros/transforms.h>
 
 using namespace std::chrono_literals;
 
 #include <autoware_msgs/DetectedObjectArray.h>
 #include <autoware_msgs/DetectedObject.h>
-#include <geometry_msgs/Point32.h>
-#include <visualization_msgs/MarkerArray.h>
 
-/* set modes */
+#include "opencv2/core/core.hpp"
+#include "opencv2/imgproc/imgproc.hpp"
+#include <cmath>
+#include <chrono>
+
+/* cloudclusterArray */
+#include <autoware_msgs/CloudClusterArray.h>
+#include <op_ros_helpers/op_ROSHelpers.h>
+#include <rtp/rtp_helper.h>
+
+
 #define USE_VECTORMAP 0
-#define USE_AUTOWARE 0
-#define DEBUG 1
-#define MODE 1 // 1 is AABB mode
+#define USE_AUTOWARE 1
+#define MODE 0 // 1 is AABB mode
                // 0 is OBB mode
-/* --------- */
-    
 #define MAX_CLUSTER_SIZE 100
+
+// #define my_car_width 1.5 // 가로
+// #define my_car_height 4.0 // 세로
+
+#define my_car_width 3.0 // 가로
+#define my_car_height 6.0 // 세로
+//for labeling
+#define detection_x_len 10
+#define detection_y_len 100
 
 class ObbGenerator{
 public:
@@ -41,29 +56,28 @@ public:
             throw std::runtime_error("set obb_boxes_topic_name");
         if(!private_nh.getParam("maximum_cluster_size", maximum_cluster_size))
             throw std::runtime_error("set maximum_cluster_size");
+
+        rh_ptr_.reset(new rtp::RTPHelper(nh));
         
-        obb_sub = nh.subscribe(sub_name.c_str(), 1, &ObbGenerator::obb_callback, this);
+        obb_sub = nh.subscribe(sub_name.c_str(), 100, &ObbGenerator::obb_callback, this);
+        obbArr_pub = nh.advertise<jsk_recognition_msgs::BoundingBoxArray>(pub_name.c_str(), 100);
+        to_lidar_kf_contour_track_pub = nh.advertise<rtp::CloudClusterArray>("/detection/lidar_detector/cloud_clusters", 10); // rtp
+        autoware_detect_pub = nh.advertise<autoware_msgs::DetectedObjectArray>("/detection/lidar_detector/objects", 100);
+        
+        transform_obbArr_pub = nh.advertise<jsk_recognition_msgs::BoundingBoxArray>("/transform_obb_boxes", 10); //test
 
-        visualization_pub = nh.advertise<visualization_msgs::MarkerArray>("/detection/visualization_objects", 1);
-        obbArr_pub = nh.advertise<jsk_recognition_msgs::BoundingBoxArray>(pub_name.c_str(), 1);
-        autoware_detect_pub = nh.advertise<autoware_msgs::DetectedObjectArray>("/detection/lidar_detector/objects", 1);
-
-        cluster_clouds.clear();
-        cluster_clouds.resize(0);
+        rh_ptr_->spin();
     }
     
     ~ObbGenerator(){
 
     }
 
-
-    void publishDetectedObjects(const jsk_recognition_msgs::BoundingBoxArray& in_objects,
-                                const std::vector<sensor_msgs::PointCloud2>& cluster_clouds)
+    void publishDetectedObjects(const jsk_recognition_msgs::BoundingBoxArray& in_objects)
     {
-        uint seq = 0;
         autoware_msgs::DetectedObjectArray detected_objects;
         detected_objects.header = in_objects.header;
-        geometry_msgs::Point32 point;
+
         for (auto& object : in_objects.boxes)
         {
             autoware_msgs::DetectedObject detected_object;
@@ -73,82 +87,12 @@ public:
             detected_object.space_frame = in_objects.header.frame_id;
             detected_object.pose = object.pose;
             detected_object.dimensions = object.dimensions;
-            detected_object.pointcloud = cluster_clouds[seq];
+            // detected_object.pointcloud = in_clusters.clusters[i].cloud;
+            // detected_object.convex_hull = in_clusters.clusters[i].convex_hull;
             detected_object.valid = true;
             detected_objects.objects.push_back(detected_object);
-
-            point.x = object.pose.position.x + (object.dimensions.x / 2);
-            point.y = object.pose.position.y + (object.dimensions.y / 2);
-            point.z = object.pose.position.z - (object.dimensions.z / 2);
-            detected_object.convex_hull.polygon.points.emplace_back(point);
-        
-            point.x = object.pose.position.x - (object.dimensions.x / 2);
-            point.y = object.pose.position.y + (object.dimensions.y / 2);
-            point.z = object.pose.position.z - (object.dimensions.z / 2);
-            detected_object.convex_hull.polygon.points.emplace_back(point);
-        
-            point.x = object.pose.position.x + (object.dimensions.x / 2);
-            point.y = object.pose.position.y - (object.dimensions.y / 2);
-            point.z = object.pose.position.z - (object.dimensions.z / 2);
-            detected_object.convex_hull.polygon.points.emplace_back(point);
-        
-            point.x = object.pose.position.x - (object.dimensions.x / 2);
-            point.y = object.pose.position.y - (object.dimensions.y / 2);
-            point.z = object.pose.position.z - (object.dimensions.z / 2);
-            detected_object.convex_hull.polygon.points.emplace_back(point);
-
-            point.x = object.pose.position.x + (object.dimensions.x / 2);
-            point.y = object.pose.position.y + (object.dimensions.y / 2);
-            point.z = object.pose.position.z + (object.dimensions.z / 2);
-            detected_object.convex_hull.polygon.points.emplace_back(point);
-        
-            point.x = object.pose.position.x - (object.dimensions.x / 2);
-            point.y = object.pose.position.y + (object.dimensions.y / 2);
-            point.z = object.pose.position.z + (object.dimensions.z / 2);
-            detected_object.convex_hull.polygon.points.emplace_back(point);
-        
-            point.x = object.pose.position.x + (object.dimensions.x / 2);
-            point.y = object.pose.position.y - (object.dimensions.y / 2);
-            point.z = object.pose.position.z + (object.dimensions.z / 2);
-            detected_object.convex_hull.polygon.points.emplace_back(point);
-        
-            point.x = object.pose.position.x - (object.dimensions.x / 2);
-            point.y = object.pose.position.y - (object.dimensions.y / 2);
-            point.z = object.pose.position.z + (object.dimensions.z / 2);
-            detected_object.convex_hull.polygon.points.emplace_back(point);
-            seq++;
         }
         autoware_detect_pub.publish(detected_objects);
-#if DEBUG
-        debugVisualization(detected_objects);
-#endif
-    }
-
-    void debugVisualization(autoware_msgs::DetectedObjectArray& in_obj){
-        visualization_msgs::MarkerArray visualization_markers;
-        int marker_id_ = 0;
-        for (auto const &object: in_obj.objects)
-        {
-            visualization_msgs::Marker hull;
-            hull.lifetime = ros::Duration(0.1);
-            hull.header = in_obj.header;
-            hull.type = visualization_msgs::Marker::LINE_STRIP;
-            hull.action = visualization_msgs::Marker::ADD;
-            hull.ns = "lidar_detect/hull_markers";
-            hull.id = marker_id_++;
-            hull.scale.x = 0.2;
-
-            for(auto const &point: object.convex_hull.polygon.points)
-            {
-                geometry_msgs::Point tmp_point;
-                tmp_point.x = point.x;
-                tmp_point.y = point.y;
-                tmp_point.z = point.z;
-                hull.points.push_back(tmp_point);
-            }
-            visualization_markers.markers.push_back(hull);
-        }
-        visualization_pub.publish(visualization_markers);
     }
 
 #if USE_VECTORMAP
@@ -157,60 +101,179 @@ public:
     }
 #endif
 
-    void obb_callback(const obb_generator_msgs::cloudArray::ConstPtr& in_obb){
+    void obb_callback(const lidar_visionlab_clustering::cloudArray::ConstPtr& in_obb){
+
+        // obb_boxes
         pcl::PointCloud<pcl::PointXYZ> scan;
         jsk_recognition_msgs::BoundingBox obb;
         jsk_recognition_msgs::BoundingBoxArray obb_arr;
 
         obb_arr.header = in_obb->header;
         int z_idx = 0;
+        
         for (auto& cloudarr : in_obb->cloudArray){
+    
             pcl::fromROSMsg(cloudarr, scan);
-
             if(scan.points.size() > MAX_CLUSTER_SIZE) continue;
 
-            pcl::PointCloud<pcl::PointXYZ>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZ> (scan));
-            feature_extractor.setInputCloud (cloud);
-            feature_extractor.compute ();
+            std::vector<cv::Point2f> points;
+            for(unsigned int i = 0; i < scan.points.size(); i++)
+            {
+                cv::Point2f pt;
+                pt.x = scan.points[i].x;
+                pt.y = scan.points[i].y;
+                points.push_back(pt);
+            }
 
-#if MODE    /* AABB MODE */
-            feature_extractor.getAABB (min_point_AABB, max_point_AABB);
+            std::vector<cv::Point2f> hull;
+            cv::convexHull(points, hull);
+
+            cv::RotatedRect box = minAreaRect(hull);
+            
+            if(fabs(box.center.x) < my_car_height && fabs(box.center.y) < my_car_width) 
+            {
+                z_idx++;
+                continue;
+            }
+            if(in_obb->zArray[z_idx] <= 0.001) 
+            {
+                z_idx++;
+                continue;
+            }
+            double rz = box.angle *3.14 / 180;
             obb.header = in_obb->header;
-            obb.pose.position.x = min_point_AABB.x + (max_point_AABB.x - min_point_AABB.x) / 2;
-            obb.pose.position.y = min_point_AABB.y + (max_point_AABB.y - min_point_AABB.y) / 2;
-            obb.pose.position.z = min_point_AABB.z + (in_obb->zArray[z_idx] / 2);
-            obb.dimensions.x = max_point_AABB.x - min_point_AABB.x;
-            obb.dimensions.y = max_point_AABB.y - min_point_AABB.y;
+            obb.pose.position.x = box.center.x;
+            obb.pose.position.y = box.center.y;
+            obb.pose.position.z = (in_obb->zArray[z_idx] / 2) - 1.785;
+            obb.dimensions.x = box.size.width;
+            obb.dimensions.y = box.size.height;
             obb.dimensions.z = in_obb->zArray[z_idx];
 
-#else       /* OBB MODE */
-            feature_extractor.getOBB (min_point_OBB, max_point_OBB, position_OBB, rotational_matrix_OBB);
-            obb.header = in_obb->header;
-            Eigen::Quaternionf quat (rotational_matrix_OBB);
-            obb.pose.orientation.x = quat.x();
-            obb.pose.orientation.y = quat.y();
-            obb.pose.orientation.z = quat.z();
-            obb.pose.orientation.w = quat.w();
-            obb.pose.position.x = position_OBB.x;
-            obb.pose.position.y = position_OBB.y;
-            obb.pose.position.z = position_OBB.z + (in_obb->zArray[z_idx] / 2) ;
-            obb.dimensions.x = max_point_OBB.x - min_point_OBB.x;
-            obb.dimensions.y = max_point_OBB.y - min_point_OBB.y;
-            obb.dimensions.z = in_obb->zArray[z_idx];
-#endif
+            // set bounding box direction
+            tf::Quaternion quat = tf::createQuaternionFromRPY(0.0, 0.0, rz);
+            tf::quaternionTFToMsg(quat, obb.pose.orientation);
+
             ++z_idx;
             obb_arr.boxes.emplace_back(obb);
-
-#if USE_AUTOWARE
-            cluster_clouds.emplace_back(cloudarr);
-
-#endif
         }
 
+
+        // cloud_clusters
+        
+        autoware_msgs::CloudClusterArray cloudclusterarray;
+        autoware_msgs::CloudCluster cloudcluster;
+        
+        jsk_recognition_msgs::BoundingBox obb2; //test
+        jsk_recognition_msgs::BoundingBoxArray obb_arr2; //test
+        obb_arr2.header = in_obb->header;
+        obb_arr2.header.frame_id = "/map";
+
+        int id_ = 0;
+        z_idx = 0;
+        cloudclusterarray.header = in_obb->header;
+        cloudclusterarray.header.frame_id = "/map";
+        
+        srand((unsigned)time(NULL));
+
+        for (auto& cloudarr : in_obb->cloudArray){
+
+            pcl::fromROSMsg(cloudarr, scan);
+            if(scan.points.size() > MAX_CLUSTER_SIZE) continue;
+
+            pcl::PointCloud<pcl::PointXYZ> tmp;
+            pcl::PointCloud<pcl::PointXYZI> transformed_scan;
+            tf::StampedTransform transform;
+	        PlannerHNS::ROSHelpers::GetTransformFromTF("/map", "/velodyne", transform);
+            pcl_ros::transformPointCloud(scan, tmp, transform);
+
+            pcl::copyPointCloud(tmp, transformed_scan);
+
+            double x_ = transform.getOrigin().getX();
+            double y_ = transform.getOrigin().getY();
+
+            std::vector<cv::Point2f> points;
+            double z_pose;
+
+            for(unsigned int i = 0; i < transformed_scan.points.size(); i++)
+            {
+                cv::Point2f pt;
+                pt.x = transformed_scan.points[i].x;
+                pt.y = transformed_scan.points[i].y;
+                z_pose = transformed_scan.points[i].z;
+                points.push_back(pt);
+            }
+
+            sensor_msgs::PointCloud2 transfromed_msg;
+            pcl::PointCloud<pcl::PointXYZI>::Ptr scan_ptr(new pcl::PointCloud<pcl::PointXYZI>(transformed_scan));
+            pcl::toROSMsg(*scan_ptr, transfromed_msg);
+
+            std::vector<cv::Point2f> hull;
+            cv::convexHull(points, hull);
+
+            cv::RotatedRect box = minAreaRect(hull);
+            
+            if(box.center.x < x_ + my_car_height && box.center.x > x_ - my_car_height 
+                && box.center.y <  y_ + my_car_width && box.center.y > y_ - my_car_width) 
+            {
+                //cout << box.center.x << " , " << box.center.y << endl;
+                z_idx++;
+                continue;
+            }
+
+            if(in_obb->zArray[z_idx] <= 0.001) 
+            {
+                z_idx++;
+                continue;
+            }
+
+            // set bounding box direction
+            double rz = box.angle *3.14 / 180;
+            tf::Quaternion quat = tf::createQuaternionFromRPY(0.0, 0.0, rz);
+            tf::quaternionTFToMsg(quat, obb.pose.orientation);
+            tf::quaternionTFToMsg(quat, obb2.pose.orientation);
+            cloudcluster.header = in_obb->header;
+            cloudcluster.header.frame_id = "/map";
+            cloudcluster.id = id_;
+            cloudcluster.label = "unknown";
+            
+            cloudcluster.score = 0.0;
+            cloudcluster.cloud = transfromed_msg;
+            cloudcluster.centroid_point.point.x = box.center.x;
+            cloudcluster.centroid_point.point.y = box.center.y;
+            cloudcluster.centroid_point.point.z = z_pose + ((in_obb->zArray[z_idx] / 2));
+            cloudcluster.estimated_angle = tf::getYaw(obb.pose.orientation);
+            cloudcluster.dimensions.x = box.size.width;
+            cloudcluster.dimensions.y = box.size.height;
+            cloudcluster.dimensions.z = in_obb->zArray[z_idx];
+            cloudcluster.indicator_state = 3; // None
+            cloudcluster.avg_point.point.x = box.center.x;
+            cloudcluster.avg_point.point.y = box.center.y;
+            cloudcluster.avg_point.point.z = z_pose + ((in_obb->zArray[z_idx] / 2));
+            ++z_idx;
+            ++id_;
+            cloudclusterarray.clusters.push_back(cloudcluster);
+
+            //test
+            obb2.header = in_obb->header;
+            obb2.header.frame_id = "/map";
+            obb2.pose.position.x = box.center.x;
+            obb2.pose.position.y = box.center.y;
+            obb2.pose.position.z = z_pose + ((in_obb->zArray[z_idx] / 2));
+            obb2.dimensions.x = box.size.width;
+            obb2.dimensions.y = box.size.height;
+            obb2.dimensions.z = in_obb->zArray[z_idx];
+
+            obb_arr2.boxes.emplace_back(obb2);
+        }
+        
+        // to_lidar_kf_contour_track_pub.publish(cloudclusterarray);
+        
+        rtp::CloudClusterArray rtp_cloudclusterarray;
+        rh_ptr_->messageInterface(cloudclusterarray, rtp_cloudclusterarray, rtp::RTPHelper::Sensor::ACTIVATED);
+        to_lidar_kf_contour_track_pub.publish(rtp_cloudclusterarray);
+        transform_obbArr_pub.publish(obb_arr2);
 #if USE_AUTOWARE
-        publishDetectedObjects(obb_arr, cluster_clouds);
-        cluster_clouds.clear();
-        cluster_clouds.resize(0);
+        publishDetectedObjects(obb_arr);
 #endif
         obbArr_pub.publish(obb_arr);
     }
@@ -223,12 +286,15 @@ private:
 
     ros::Publisher obbArr_pub;
     ros::Publisher autoware_detect_pub;
-    ros::Publisher visualization_pub;
+    ros::Publisher to_lidar_kf_contour_track_pub;
+
+    ros::Publisher transform_obbArr_pub; //test
 
     std::string pub_name, sub_name;
     pcl::MomentOfInertiaEstimation<pcl::PointXYZ> feature_extractor;
     double maximum_cluster_size;
-    std::vector<sensor_msgs::PointCloud2> cluster_clouds;
+
+
 #if MODE
     /* AABB mode */
     pcl::PointXYZ min_point_AABB;
@@ -239,38 +305,21 @@ private:
     pcl::PointXYZ max_point_OBB;
     pcl::PointXYZ position_OBB;
     Eigen::Matrix3f rotational_matrix_OBB;
+    rtp::RTPHelperPtr rh_ptr_;
 #endif
 };
 
-void printMode(){
-    ROS_INFO("===== OBB GENERATOR MODES =====");
-    if(MODE)
-        ROS_INFO("  Gen MODE       : AABB");
-    else
-        ROS_INFO("  Gen MODE       : OBB");
-
-    if(USE_VECTORMAP)
-        ROS_INFO("  Vectormap MODE : True");
-    else
-        ROS_INFO("  Vectormap MODE : False");
-    
-    if(USE_AUTOWARE)
-        ROS_INFO("  Autoware MODE  : True");
-    else
-        ROS_INFO("  Autoware MODE  : False");
-
-    if(DEBUG)
-        ROS_INFO("  Debug MODE     : True");
-    else
-        ROS_INFO("  Debug MODE     : False");
-}
 
 int main (int argc, char** argv)
 {
     ros::init(argc, argv, "obb_generator");
     ObbGenerator obbgen;
-    printMode();
 
-    ros::spin();
+    if(MODE)
+        ROS_INFO("OBB GENERATOR MODE : AABB MODE");
+    else
+        ROS_INFO("OBB GENERATOR MODE : OBB MODE");
+    
+    // ros::spin();
     return (0);
 }
