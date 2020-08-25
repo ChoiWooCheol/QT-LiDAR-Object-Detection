@@ -44,7 +44,7 @@ $ roslaunch lidar_detect qt_detect_launch.launch
 <img src="QT_Lidar_Detection/images/compare.png" width="100%" height="100%">
 
 2. QT-detect output
- * has rotation
+ * has orientation
  * minimum size box for clustering obj
 <img src="QT_Lidar_Detection/images/qt_detect_rviz.png" width="100%" height="100%">
 <img src="QT_Lidar_Detection/images/qt_obb_rviz.png" width="100%" height="100%">
