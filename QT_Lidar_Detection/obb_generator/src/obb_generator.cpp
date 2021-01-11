@@ -7,7 +7,7 @@
 #include <pcl/io/pcd_io.h>
 #include <pcl/point_types.h>
 #include <pcl/visualization/cloud_viewer.h>
-#include <lidar_visionlab_clustering/cloudArray.h>
+#include <obb_generator_msgs/cloudArray.h>
 #include <pcl_ros/point_cloud.h>
 #include <jsk_recognition_msgs/BoundingBox.h>
 #include <jsk_recognition_msgs/BoundingBoxArray.h>
@@ -101,7 +101,7 @@ public:
     }
 #endif
 
-    void obb_callback(const lidar_visionlab_clustering::cloudArray::ConstPtr& in_obb){
+    void obb_callback(const obb_generator_msgs::cloudArray::ConstPtr& in_obb){
 
         // obb_boxes
         pcl::PointCloud<pcl::PointXYZ> scan;
